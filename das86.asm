@@ -5,9 +5,8 @@ entry start
 
 segment readable writable
 
-valid		db "das86: valid!", 10, 0
 usage		db "das86: usage: das86 src [dst]", 10, 0
-error_msg	db "das86: error: error closing file!", 10, 0	
+default_dst	dq "out.asm", 0					; default dst file
 
 segment readable writable
 
@@ -62,75 +61,65 @@ start:
 	mov rsi, 1		; arg2 = O_WRONLY
 	syscall			; call open
 	cmp rax, 0
-	jl .error
+	jl .error_close
 	mov [dst_fd], rax
 	jmp .read
 
 .create_dst:
 	; create the default destination file "out.asm"
-		
+	mov rax, 85 		; syscall #85 (creat)
+	mov rdi, default_dst	; arg1 = filename
+	mov rsi, 453		; arg2 = O_WRONLY | O_CREAT | S_IRWXU
+	syscall			; call creat
+	cmp rax, 0
+	jl .error_close
+	mov [dst_fd], rax
 
 .read:
 	; read machine code file
-	mov rax, 0		; syscall 0 (read)
+	mov rax, 0		; syscall #0 (read)
 	mov rdi, [src_fd]	; arg1 = fd
 	; mov rdi, 3	; arg1 = fd
 	lea rsi, [buffer]	; arg2 = buffer
 	mov rdx, 49		; arg3 = nbyte
 	syscall			; call read
-	cmp rax, 49
-	je .close_src
+	call close_src
+	call close_dst
+	jmp .exit
+
+.error_close:
+	; error; close src fd
+	call close_src
 
 .error:
+	; error; no need to close src fd
 	mov rsi, usage		; arg 2 = msg
 	mov rdx, 30		; arg 3 = char count
 	jmp .print
 
-.close_error:
-	mov rsi, error_msg	; arg 2 = msg
-	mov rdx, 35		; arg 3 = char count
-
 .print:
 	; write string to stdout
-	mov     rax, 1		; syscall 1 (write)
+	mov     rax, 1		; syscall #1 (write)
 	mov     rdi, rax	; arg 1 = 1 (stdout)
 	syscall			; call write
 	jmp .exit
 
-.close_src:
-	; close src file
-	mov rax, 3		; syscall 3 (close)
-	mov rdi, [src_fd]	; arg1 = fd
-	syscall			; call close
-	cmp rax, 0
-	jne .close_error
-
-.close_dst:
-	; close dst file
-	mov rax, 3		; syscall 3 (close)
-	mov rdi, [dst_fd]	; arg1 = fd
-	syscall			; call close
-	cmp rax, 0
-	jne .close_error
-
 .exit:
-	mov rax, 60     ; syscall 60 (exit)
+	mov rax, 60     ; syscall #60 (exit)
 	mov rdi, 0      ; arg 1 = 0 (OK)
 	syscall         ; call exit
 
-; Determines the length of a C-style NULL-terminated string.
-;
-; Inputs:   RSI = address of beginning of string buffer
-; Outputs:  RDX = length of the string, including the NULL terminator
-; Clobbers: CL, flags
-strlen:
-    lea    rdx, [rsi + 1]
 
-strlen_loop:
-    mov    cl, byte [rdx]
-    inc    rdx
-    test   cl, cl
-    jnz    strlen_loop
+; function to close src file
+close_src:
+	mov rax, 3		; syscall #3 (close)
+	mov rdi, [src_fd]	; arg1 = fd
+	syscall			; call close
+	ret
 
-    sub    rdx, rsi	; arg 3 = char count
-    ret
+; function to close dst file
+close_dst:
+	mov rax, 3		; syscall #3 (close)
+	mov rdi, [dst_fd]	; arg1 = fd
+	syscall			; call close
+	ret
