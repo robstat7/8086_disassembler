@@ -83,13 +83,17 @@ start:
 	lea rsi, [buffer]	; arg2 = buffer
 	mov rdx, 49		; arg3 = nbyte
 	syscall			; call read
-	call close_src
-	call close_dst
+
+	mov rdi, [src_fd]	; arg1 = fd
+	call close
+	mov rdi, [dst_fd]
+	call close
 	jmp .exit
 
 .error_close:
 	; error; close src fd
-	call close_src
+	mov rdi, [src_fd]	; arg1 = fd
+	call close
 
 .error:
 	; error; no need to close src fd
@@ -110,16 +114,8 @@ start:
 	syscall         ; call exit
 
 
-; function to close src file
-close_src:
+; function to close file descriptor
+close:
 	mov rax, 3		; syscall #3 (close)
-	mov rdi, [src_fd]	; arg1 = fd
-	syscall			; call close
-	ret
-
-; function to close dst file
-close_dst:
-	mov rax, 3		; syscall #3 (close)
-	mov rdi, [dst_fd]	; arg1 = fd
 	syscall			; call close
 	ret
