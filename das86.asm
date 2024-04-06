@@ -51,7 +51,7 @@ start:
 	
 	mov al, [argc]
 	cmp rax, 3
-	jne .exit
+	jne .exit		; bypass close syscall for now
 	mov rax, 2		; syscall 2 (open)
 	mov rdi, [dst]		; arg1 = filename
 	mov rsi, 1		; arg2 = O_WRONLY
