@@ -11,55 +11,64 @@ error_msg	db "das86: error: error closing file!", 10, 0
 
 segment readable writable
 
-argc		db ?
-src		dq ?
-dst		dq ?
-src_fd		dq ?
-dst_fd		dq ?
-buffer		dq ?
+argc		db ?	; `argc` as passed to the main function
+src		dq ?	; src file at cmdline arg #2
+dst		dq ?	; dst file at cmdline arg #3
+src_fd		dq ?	; src file descriptor
+dst_fd		dq ?	; destination file descriptor
+buffer		dq ?	; buffer to hold the data read using read syscall
 
 segment readable executable
 
 start:
 	; get the command line arguments
 	; int main(int argc, char *argv[ ])
-	mov rax, [rsp] ; argc
+	mov rax, [rsp]		; rax = argc
 	cmp rax, 2
 	je .valid
 	cmp rax, 3
-	jne .error
+	jne .error		; invalid number of cmdline args
 
 .valid:
-	mov rsi, [rsp + 16] ; argv[1]
-	mov [src], rsi
-	mov [argc], al
+	; We have a valid number of cmdline args. Proceed ahead.
+	mov rsi, [rsp + 16] 	; rsi = argv[1]
+	mov [src], rsi		; store the address of src file
+	mov [argc], al		; store `argc`
 
-	cmp rax, 3
-	jne .open
-	mov rsi, [rsp + 24] ; argv[2]
+	cmp rax, 3		
+	jne .open_src		; rax = argc = 2
+	mov rsi, [rsp + 24]	; rsi = argv[2]
 	mov [dst], rsi
 	mov [argc], al
 
-.open:
-	; open a file
-	mov rax, 2		; syscall 2 (open)
+.open_src:
+	; open src file
+	mov rax, 2		; syscall #2 (open)
 	mov rdi, [src]		; arg1 = filename
 	mov rsi, 0		; arg2 = O_RDONLY
 	syscall			; call open
 	cmp rax, 0
 	jl .error
-	mov [src_fd], rax
+	mov [src_fd], rax	; store src fd if open syscall was successful
 	
 	mov al, [argc]
 	cmp rax, 3
-	jne .read		; bypass close syscall for now
-	mov rax, 2		; syscall 2 (open)
+	jne .create_dst		; the user requested writing to the default dst file
+
+.open_dst:
+	; open destination file
+	mov rax, 2		; syscall #2 (open)
 	mov rdi, [dst]		; arg1 = filename
 	mov rsi, 1		; arg2 = O_WRONLY
 	syscall			; call open
 	cmp rax, 0
 	jl .error
 	mov [dst_fd], rax
+	jmp .read
+
+.create_dst:
+	; create the default destination file "out.asm"
+		
 
 .read:
 	; read machine code file
