@@ -14,8 +14,9 @@ segment readable writable
 argc		db ?
 src		dq ?
 dst		dq ?
-src_fd		dw ?
-dst_fd		dw ?
+src_fd		dq ?
+dst_fd		dq ?
+buffer		dq ?
 
 segment readable executable
 
@@ -47,20 +48,29 @@ start:
 	syscall			; call open
 	cmp rax, 0
 	jl .error
-	mov [src_fd], ax
+	mov [src_fd], rax
 	
 	mov al, [argc]
 	cmp rax, 3
-	jne .exit		; bypass close syscall for now
+	jne .read		; bypass close syscall for now
 	mov rax, 2		; syscall 2 (open)
 	mov rdi, [dst]		; arg1 = filename
 	mov rsi, 1		; arg2 = O_WRONLY
 	syscall			; call open
 	cmp rax, 0
 	jl .error
-	mov [dst_fd], ax
-	jmp .exit		; bypass close syscall for now
-	
+	mov [dst_fd], rax
+
+.read:
+	; read machine code file
+	mov rax, 0		; syscall 0 (read)
+	mov rdi, [src_fd]	; arg1 = fd
+	; mov rdi, 3	; arg1 = fd
+	lea rsi, [buffer]	; arg2 = buffer
+	mov rdx, 49		; arg3 = nbyte
+	syscall			; call read
+	cmp rax, 49
+	je .close_src
 
 .error:
 	mov rsi, usage		; arg 2 = msg
@@ -78,11 +88,18 @@ start:
 	syscall			; call write
 	jmp .exit
 
-.end:
-	; close a file
+.close_src:
+	; close src file
 	mov rax, 3		; syscall 3 (close)
-	; mov di, [src_fd]	; arg1 = fd
-	mov di, [src_fd]	; arg1 = fd
+	mov rdi, [src_fd]	; arg1 = fd
+	syscall			; call close
+	cmp rax, 0
+	jne .close_error
+
+.close_dst:
+	; close dst file
+	mov rax, 3		; syscall 3 (close)
+	mov rdi, [dst_fd]	; arg1 = fd
 	syscall			; call close
 	cmp rax, 0
 	jne .close_error
