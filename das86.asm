@@ -17,7 +17,6 @@ start:
 	cmp rax, 3
 	jne .error
 
-	; mov rcx, [rsp + 8] ; *argv
 .valid:
 	mov     rsi, valid	; arg 2 = msg
 	mov	rdx, 14		; arg 3 = char count
