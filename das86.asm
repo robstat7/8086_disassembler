@@ -7,12 +7,15 @@ segment readable writable
 
 valid		db "das86: valid!", 10, 0
 usage		db "das86: usage: das86 src [dst]", 10, 0
-argc		db 0
+error_msg	db "das86: error: error closing file!", 10, 0	
 
 segment readable writable
 
+argc		db ?
 src		dq ?
 dst		dq ?
+src_fd		dw ?
+dst_fd		dw ?
 
 segment readable executable
 
@@ -31,23 +34,60 @@ start:
 	mov [argc], al
 
 	cmp rax, 3
-	jne .end
+	jne .open
 	mov rsi, [rsp + 24] ; argv[2]
 	mov [dst], rsi
 	mov [argc], al
-	jmp .end
+
+.open:
+	; open a file
+	mov rax, 2		; syscall 2 (open)
+	mov rdi, [src]		; arg1 = filename
+	mov rsi, 0		; arg2 = O_RDONLY
+	syscall			; call open
+	cmp rax, 0
+	jl .error
+	mov [src_fd], ax
+	
+	mov al, [argc]
+	cmp rax, 3
+	jne .exit
+	mov rax, 2		; syscall 2 (open)
+	mov rdi, [dst]		; arg1 = filename
+	mov rsi, 1		; arg2 = O_WRONLY
+	syscall			; call open
+	cmp rax, 0
+	jl .error
+	mov [dst_fd], ax
+	jmp .exit		; bypass close syscall for now
+	
 
 .error:
 	mov rsi, usage		; arg 2 = msg
 	mov rdx, 30		; arg 3 = char count
+	jmp .print
+
+.close_error:
+	mov rsi, error_msg	; arg 2 = msg
+	mov rdx, 35		; arg 3 = char count
 
 .print:
 	; write string to stdout
 	mov     rax, 1		; syscall 1 (write)
 	mov     rdi, rax	; arg 1 = 1 (stdout)
 	syscall			; call write
+	jmp .exit
 
 .end:
+	; close a file
+	mov rax, 3		; syscall 3 (close)
+	; mov di, [src_fd]	; arg1 = fd
+	mov di, [src_fd]	; arg1 = fd
+	syscall			; call close
+	cmp rax, 0
+	jne .close_error
+
+.exit:
 	mov rax, 60     ; syscall 60 (exit)
 	mov rdi, 0      ; arg 1 = 0 (OK)
 	syscall         ; call exit
