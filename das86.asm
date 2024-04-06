@@ -5,13 +5,14 @@ entry start
 
 segment readable writable
 
-valid db "das86: valid!", 10, 0
-usage db "das86: usage: das86 src [dst]", 10, 0
+valid		db "das86: valid!", 10, 0
+usage		db "das86: usage: das86 src [dst]", 10, 0
+argc		db 0
 
 segment readable writable
 
-src	dq ?
-dst	dq ?
+src		dq ?
+dst		dq ?
 
 segment readable executable
 
@@ -27,11 +28,13 @@ start:
 .valid:
 	mov rsi, [rsp + 16] ; argv[1]
 	mov [src], rsi
+	mov [argc], al
 
 	cmp rax, 3
 	jne .end
 	mov rsi, [rsp + 24] ; argv[2]
 	mov [dst], rsi
+	mov [argc], al
 	jmp .end
 
 .error:
