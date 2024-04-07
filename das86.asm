@@ -3,6 +3,19 @@ format ELF64 executable 3	; value 3 marks the executable for Linux system
 
 entry start
 
+struc object_code byte0, num_succ_bytes, mnemonic {
+        .byte0 db byte0
+        .num_succ_bytes db num_succ_bytes
+	.mnemonic db mnemonic
+}
+
+obj_code_a0 object_code "a0", 2, "mov al, op"
+obj_code_8a object_code "8a", 3, "mov op, op"
+
+object_codes:
+	dq obj_code_a0
+	dq obj_code_8a
+
 segment readable writable
 
 usage		db "das86: usage: das86 src [dst]", 10, 0
@@ -15,7 +28,7 @@ src		dq ?	; src file at cmdline arg #2
 dst		dq ?	; dst file at cmdline arg #3
 src_fd		dq ?	; src file descriptor
 dst_fd		dq ?	; destination file descriptor
-buffer		dq ?	; buffer to hold the data read using read syscall
+buffer		db ?	; buffer to hold the data read using read syscall
 
 segment readable executable
 
@@ -63,7 +76,7 @@ start:
 	cmp rax, 0
 	jl .error_close
 	mov [dst_fd], rax
-	jmp .read
+	jmp .lseek
 
 .create_dst:
 	; create the default destination file "out.asm"
@@ -75,15 +88,23 @@ start:
 	jl .error_close
 	mov [dst_fd], rax
 
-.read:
-	; read machine code file
-	mov rax, 0		; syscall #0 (read)
+.lseek:
+	; reposition read file offset to 10 bytes (at the first instruction mnemonic)
+	mov rax, 8		; syscall #8 (lseek)
 	mov rdi, [src_fd]	; arg1 = fd
-	; mov rdi, 3	; arg1 = fd
-	lea rsi, [buffer]	; arg2 = buffer
-	mov rdx, 49		; arg3 = nbyte
-	syscall			; call read
+	mov rsi, 10		; arg2 = offset
+	mov rdx, 0		; arg3 = SEEK_SET
+	syscall			; call lseek
+	cmp rax, rsi
+	jne .close_fds
+	mov rdx, 2		; arg3 = nbyte
+	call read
+	cmp rax, rdx
+	jne .close_fds
+	; retrieve object code information for buffer (byte #0)
 
+
+.close_fds:
 	mov rdi, [src_fd]	; arg1 = fd
 	call close
 	mov rdi, [dst_fd]
@@ -114,8 +135,19 @@ start:
 	syscall         ; call exit
 
 
+; function to read machine code src file
+read:
+	mov rax, 0		; syscall #0 (read)
+	mov rdi, [src_fd]	; arg1 = fd
+	lea rsi, [buffer]	; arg2 = buffer
+	syscall			; call read
+	ret
+
 ; function to close file descriptor
 close:
 	mov rax, 3		; syscall #3 (close)
 	syscall			; call close
 	ret
+
+find_obj_code:
+	
