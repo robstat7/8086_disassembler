@@ -15,6 +15,7 @@ obj_code_8a object_code "8a", 3, "mov op, op"
 object_codes:
 	dq obj_code_a0
 	dq obj_code_8a
+	dq "NL"
 
 segment readable writable
 
@@ -28,7 +29,8 @@ src		dq ?	; src file at cmdline arg #2
 dst		dq ?	; dst file at cmdline arg #3
 src_fd		dq ?	; src file descriptor
 dst_fd		dq ?	; destination file descriptor
-buffer		db ?	; buffer to hold the data read using read syscall
+buffer		dw ?	; buffer to hold the data read using read syscall
+tmp_buff	dw ?
 
 segment readable executable
 
@@ -97,11 +99,17 @@ start:
 	syscall			; call lseek
 	cmp rax, rsi
 	jne .close_fds
+
+.main:
+	; read the first instruction mnemonic (byte #0)
 	mov rdx, 2		; arg3 = nbyte
 	call read
 	cmp rax, rdx
 	jne .close_fds
 	; retrieve object code information for buffer (byte #0)
+	call find_obj_code
+	jmp .exit
+	; call find_num_succ_bytes
 
 
 .close_fds:
@@ -150,4 +158,16 @@ close:
 	ret
 
 find_obj_code:
-	
+	mov rdx, object_codes
+
+find_obj_code_loop:
+	mov rax, [rdx]
+	mov cx, word [rax]
+	add rdx, 8
+
+	mov bx, [buffer]
+	cmp cx, bx
+	jne find_obj_code_loop
+	ret	; result in rax
+
+find_num_succ_bytes:
